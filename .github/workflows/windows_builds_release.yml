@@ -26,21 +26,24 @@ jobs:
       matrix:
         include:
           - name: Editor (target=editor)
-            cache-name: windows-editor
+            cache-name: windows-editor-mono
             target: editor
             scons-flags: >-
               windows_subsystem=gui
+              module_mono_enabled=yes
               vsproj=yes
               vsproj_gen_only=no
-            bin: ./bin/godot.windows.editor.x86_64.exe
+            bin: ./bin/godot.windows.editor.x86_64.mono.exe
+            build-mono: true
             compiler: msvc
 
           - name: Template (target=template_release)
-            cache-name: windows-template
+            cache-name: windows-template-mono
             target: template_release
             scons-flags: >-
               windows_subsystem=gui
-            bin: ./bin/godot.windows.template_release.x86_64.exe
+              module_mono_enabled=yes
+            bin: ./bin/godot.windows.template_release.x86_64.mono.exe
             compiler: msvc
 
 
@@ -55,11 +58,6 @@ jobs:
         with:
           cache-name: ${{ matrix.cache-name }}
         continue-on-error: true
-
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: 8.0.x
 
       - name: Setup Python and SCons
         uses: ./.github/actions/godot-deps
@@ -98,26 +96,10 @@ jobs:
       - name: Extract pre-built AccessKit
         run: unzip -o accesskit-c-0.18.0/accesskit_c.zip
 
-      # ===== 第一阶段构建 =====
-      - name: Initial Compilation
+      - name: Compilation
         uses: ./.github/actions/godot-build
         with:
-          scons-flags: ${{ env.SCONS_FLAGS }} module_mono_enabled=yes mono_glue=no ${{ matrix.scons-flags }} d3d12=${{ steps.d3d12-sdk.outputs.D3D12_ENABLED }}
-          platform: windows
-          target: ${{ matrix.target }}
-
-      # ===== 生成 Mono Glue（仅 Editor）=====
-      - name: Generate Mono Glue
-        if: matrix.target == 'editor'
-        run: |
-          ./bin/godot.windows.editor.x86_64.exe --generate-mono-glue modules/mono/glue
-
-      # ===== 第二阶段构建（带 glue）=====
-      - name: Final Compilation (Mono)
-        if: matrix.target == 'editor'
-        uses: ./.github/actions/godot-build
-        with:
-          scons-flags: ${{ env.SCONS_FLAGS }} ${{ matrix.scons-flags }} mono_glue=yes d3d12=${{ steps.d3d12-sdk.outputs.D3D12_ENABLED }}
+          scons-flags: ${{ env.SCONS_FLAGS }} ${{ matrix.scons-flags }} d3d12=${{ steps.d3d12-sdk.outputs.D3D12_ENABLED }}
           platform: windows
           target: ${{ matrix.target }}
 
@@ -126,6 +108,17 @@ jobs:
         with:
           cache-name: ${{ matrix.cache-name }}
         continue-on-error: true
+        
+      - name: Generate C# glue
+        if: matrix.build-mono
+        run: |
+          ${{ matrix.bin }} --headless --generate-mono-glue ./modules/mono/glue
+          
+      - name: Build .NET solutions
+        if: matrix.build-mono
+        run: |
+          dotnet --info
+          ./modules/mono/build_scripts/build_assemblies.py --godot-output-dir=./bin --godot-platform=windows --werror
 
       - name: Prepare artifact
         if: matrix.compiler == 'msvc'

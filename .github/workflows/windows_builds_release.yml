@@ -29,7 +29,7 @@ jobs:
             cache-name: windows-editor
             target: editor
             scons-flags: >-
-              windows_subsystem=windows
+              windows_subsystem=gui
               vsproj=yes
               vsproj_gen_only=no
             bin: ./bin/godot.windows.editor.x86_64.exe
@@ -39,7 +39,7 @@ jobs:
             cache-name: windows-template
             target: template_release
             scons-flags: >-
-              windows_subsystem=windows
+              windows_subsystem=gui
             bin: ./bin/godot.windows.template_release.x86_64.exe
             compiler: msvc
 

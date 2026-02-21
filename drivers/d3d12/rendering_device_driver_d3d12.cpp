@@ -108,6 +108,41 @@ static const D3D12_RANGE VOID_RANGE = {};
 static const uint32_t MAX_DYNAMIC_BUFFERS = 8u; // Minimum guaranteed by Vulkan.
 
 /*****************/
+/****** HACK *****/
+/*****************/
+
+struct SharedMemory{
+	bool swapchains_disable[128];
+};
+
+static void* get_or_create_shared_memory() {
+	static bool mapped = false;
+	static void* ptr = nullptr;
+	if (!mapped){
+		HANDLE hMap = CreateFileMappingW(
+			INVALID_HANDLE_VALUE,
+			nullptr,
+			PAGE_READWRITE,
+			0,
+			sizeof(SharedMemory),
+			L"Local\\Godot.SharedMemory"
+		);
+
+		ptr = MapViewOfFile(
+			hMap,
+			FILE_MAP_ALL_ACCESS,
+			0, 0, 0
+		);
+		SharedMemory* shared_memory = (SharedMemory*)ptr;
+		*shared_memory = {};
+
+		mapped = true;
+	}
+	return ptr;
+}
+
+
+/*****************/
 /**** GENERIC ****/
 /*****************/
 
@@ -2516,9 +2551,13 @@ Error RenderingDeviceDriverD3D12::command_queue_execute_and_present(CommandQueue
 		}
 	}
 
+	SharedMemory* shared_memory = (SharedMemory*)get_or_create_shared_memory();
+
 	HRESULT res;
 	bool any_present_failed = false;
 	for (uint32_t i = 0; i < p_swap_chains.size(); i++) {
+		if (shared_memory->swapchains_disable[i])
+			continue;
 		SwapChain *swap_chain = (SwapChain *)(p_swap_chains[i].id);
 		res = swap_chain->d3d_swap_chain->Present(swap_chain->sync_interval, swap_chain->present_flags);
 		if (!SUCCEEDED(res)) {

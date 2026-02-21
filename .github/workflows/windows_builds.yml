@@ -1,12 +1,13 @@
 name: 🏁 Windows Builds
+
 on:
   workflow_call:
   workflow_dispatch:
 
-# Global Settings
 env:
   SCONS_FLAGS: >-
-    dev_mode=yes
+    dev_mode=no
+    production=yes
     module_text_server_fb_enabled=yes
     debug_symbols=no
     "angle_libs=${{ github.workspace }}/"
@@ -25,37 +26,26 @@ jobs:
       matrix:
         include:
           - name: Editor (target=editor)
-            cache-name: windows-editor
+            cache-name: windows-editor-mono
             target: editor
             scons-flags: >-
-              windows_subsystem=console
+              windows_subsystem=gui
+              module_mono_enabled=yes
               vsproj=yes
               vsproj_gen_only=no
-            bin: ./bin/godot.windows.editor.x86_64.exe
+            bin: ./bin/godot.windows.editor.x86_64.mono.exe
+            build-mono: true
             compiler: msvc
-
-          - name: Editor w/ clang-cl (target=editor, use_llvm=yes)
-            cache-name: windows-editor-clang
-            target: editor
-            scons-flags: >-
-              windows_subsystem=console
-              use_llvm=yes
-            bin: ./bin/godot.windows.editor.x86_64.llvm.exe
-            compiler: clang
 
           - name: Template (target=template_release)
-            cache-name: windows-template
+            cache-name: windows-template-mono
             target: template_release
-            bin: ./bin/godot.windows.template_release.x86_64.console.exe
+            scons-flags: >-
+              windows_subsystem=gui
+              module_mono_enabled=yes
+            bin: ./bin/godot.windows.template_release.x86_64.mono.exe
             compiler: msvc
 
-          - name: Template w/ GCC (target=template_release, use_mingw=yes)
-            cache-name: windows-template-gcc
-            # MinGW takes MUCH longer to compile; save time by only targeting Template.
-            target: template_release
-            scons-flags: use_mingw=yes
-            bin: ./bin/godot.windows.template_release.x86_64.console.exe
-            compiler: gcc
 
     steps:
       - name: Checkout
@@ -71,6 +61,13 @@ jobs:
 
       - name: Setup Python and SCons
         uses: ./.github/actions/godot-deps
+
+      - name: Setup older .NET SDK as baseline
+        if: matrix.build-mono
+        uses: actions/setup-dotnet@v4
+        with:
+          # Targeting the oldest version we want to support to ensure it still builds.
+          dotnet-version: 8.0.100
 
       - name: Download Direct3D 12 SDK components
         shell: sh
@@ -118,6 +115,17 @@ jobs:
         with:
           cache-name: ${{ matrix.cache-name }}
         continue-on-error: true
+
+      - name: Generate C# glue
+        if: matrix.build-mono
+        run: |
+          ${{ matrix.bin }} --headless --generate-mono-glue ./modules/mono/glue
+
+      - name: Build .NET solutions
+        if: matrix.build-mono
+        run: |
+          dotnet --info
+          ./modules/mono/build_scripts/build_assemblies.py --godot-output-dir=./bin --godot-platform=windows --werror
 
       - name: Prepare artifact
         if: matrix.compiler == 'msvc'

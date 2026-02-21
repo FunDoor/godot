@@ -113,6 +113,7 @@ static const uint32_t MAX_DYNAMIC_BUFFERS = 8u; // Minimum guaranteed by Vulkan.
 
 struct SharedMemory{
 	bool swapchains_disable[128];
+	bool force_release_swapchain;
 };
 
 static void* get_or_create_shared_memory() {
@@ -2821,17 +2822,21 @@ Error RenderingDeviceDriverD3D12::swap_chain_resize(CommandQueueID p_cmd_queue, 
 	}
 	bool create_for_composition = false;
 #endif
-
+	SharedMemory* shared_memory = (SharedMemory*)get_or_create_shared_memory();
+	if (shared_memory && shared_memory->force_release_swapchain) {
+		swap_chain->d3d_swap_chain = nullptr;
+	}
+	
 	DXGI_SWAP_CHAIN_DESC1 swap_chain_desc = {};
 	if (swap_chain->d3d_swap_chain != nullptr) {
 		_swap_chain_release_buffers(swap_chain);
 		res = swap_chain->d3d_swap_chain->ResizeBuffers(p_desired_framebuffer_count, surface->width, surface->height, DXGI_FORMAT_UNKNOWN, creation_flags);
 		ERR_FAIL_COND_V(!SUCCEEDED(res), ERR_UNAVAILABLE);
-	} else {
+	} else if ((!shared_memory) || (shared_memory && !shared_memory->force_release_swapchain)){
 		swap_chain_desc.BufferCount = p_desired_framebuffer_count;
 		swap_chain_desc.Format = RD_TO_D3D12_FORMAT[swap_chain->data_format].general_format;
 		swap_chain_desc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-		swap_chain_desc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL;
+		swap_chain_desc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
 		swap_chain_desc.SampleDesc.Count = 1;
 		swap_chain_desc.Flags = creation_flags;
 		swap_chain_desc.Scaling = DXGI_SCALING_STRETCH;

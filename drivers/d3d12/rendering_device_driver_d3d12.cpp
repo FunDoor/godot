@@ -2831,7 +2831,7 @@ Error RenderingDeviceDriverD3D12::swap_chain_resize(CommandQueueID p_cmd_queue, 
 		swap_chain_desc.BufferCount = p_desired_framebuffer_count;
 		swap_chain_desc.Format = RD_TO_D3D12_FORMAT[swap_chain->data_format].general_format;
 		swap_chain_desc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-		swap_chain_desc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
+		swap_chain_desc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL;
 		swap_chain_desc.SampleDesc.Count = 1;
 		swap_chain_desc.Flags = creation_flags;
 		swap_chain_desc.Scaling = DXGI_SCALING_STRETCH;
